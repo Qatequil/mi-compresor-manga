@@ -100,20 +100,73 @@ elif opcion == "🖼️ Extractor de Imágenes":
                 mime="application/zip"
             )
 
-# --- ✂️ RECORTADOR DE PÁGINAS ---
+# --- ✂️ RECORTADOR DE PÁGINAS (VERSIÓN VISUAL PRO) ---
 elif opcion == "✂️ Recortador de Páginas":
-    st.title("Recortador de PDFs ✂️")
+    st.title("Recortador Visual de PDFs ✂️")
+    st.write("Selecciona visualmente las páginas que deseas eliminar (ideal para quitar créditos o portadas dobles).")
+    
     archivo = st.file_uploader("Sube el PDF a editar", type=["pdf"])
-    paginas_input = st.text_input("Páginas a BORRAR (ej: 1, 3, 5)")
-    if archivo and paginas_input:
-        if st.button("Eliminar Páginas"):
-            doc = fitz.open(stream=archivo.read(), filetype="pdf")
-            indices = [int(x.strip()) - 1 for x in paginas_input.split(",")]
-            for indice in sorted(indices, reverse=True):
-                if 0 <= indice < len(doc): doc.delete_page(indice)
-            buf = io.BytesIO(); doc.save(buf)
-            st.download_button("⬇️ Descargar PDF Recortado", buf.getvalue(), f"editado_{archivo.name}", "application/pdf")
+    
+    if archivo:
+        # Abrimos el PDF original
+        doc = fitz.open(stream=archivo.read(), filetype="pdf")
+        total_paginas = len(doc)
+        st.info(f"El PDF tiene un total de {total_paginas} páginas.")
+        
+        # st.form evita que la página se recargue cada vez que haces clic en una casilla
+        with st.form("formulario_recorte"):
+            st.write("### 🖼️ Galería de Páginas")
+            st.caption("Marca la casilla debajo de las páginas que quieres BORRAR.")
+            
+            # Creamos una cuadrícula de 4 columnas para que parezca una galería
+            columnas = st.columns(4)
+            paginas_a_borrar = []
+            
+            # Generamos las miniaturas
+            for i in range(total_paginas):
+                col_actual = columnas[i % 4] # Esto reparte las imágenes entre las 4 columnas
+                with col_actual:
+                    # Extraemos la página en calidad muy baja (0.2) para que cargue súper rápido
+                    pagina = doc[i]
+                    pix = pagina.get_pixmap(matrix=fitz.Matrix(0.2, 0.2))
+                    img = Image.open(io.BytesIO(pix.tobytes("png")))
+                    
+                    st.image(img, use_container_width=True)
+                    
+                    # Si el usuario marca esta casilla, guardamos el número 'i'
+                    if st.checkbox(f"🗑️ Borrar Pág {i+1}", key=f"del_{i}"):
+                        paginas_a_borrar.append(i)
+            
+            # El botón final del formulario
+            submit = st.form_submit_button("✂️ Eliminar Páginas Seleccionadas")
+            
+        # Cuando el usuario presiona el botón del formulario
+        # Cuando el usuario presiona el botón del formulario
+        if submit:
+            if not paginas_a_borrar:
+                st.warning("No seleccionaste ninguna página.")
+            else:
+                # 1. Extraemos el nombre base igual que hicimos con el conversor
+                nombre_base = archivo.name.rsplit('.', 1)[0]
+                nombre_final_recortado = f"{nombre_base}_recortado.pdf"
 
+                # 2. Operación de borrado
+                for indice in sorted(paginas_a_borrar, reverse=True):
+                    doc.delete_page(indice)
+                
+                buf = io.BytesIO()
+                doc.save(buf)
+                
+                st.success(f"¡Listo! Se eliminaron {len(paginas_a_borrar)} páginas.")
+                
+                # 3. Botón con el nombre corregido
+                st.download_button(
+                    label=f"⬇️ Descargar {nombre_final_recortado}",
+                    data=buf.getvalue(),
+                    file_name=nombre_final_recortado, # <-- Aquí aplica el nombre que pediste
+                    mime="application/pdf"
+                )
+                
 # --- 📁 IMÁGENES A PDF (CON NOMBRE DINÁMICO) ---
 elif opcion == "📁 Imágenes a PDF (Universal)":
     st.title("Creador de PDF desde Imágenes 📁")
