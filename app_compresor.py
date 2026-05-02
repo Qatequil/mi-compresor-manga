@@ -3,112 +3,143 @@ import fitz  # PyMuPDF
 import img2pdf
 from PIL import Image, ImageEnhance, ImageStat
 import io
+import zipfile
 
-# Configuración de la página web
-st.set_page_config(page_title="Compresor Manga Pro", page_icon="📚", layout="centered")
+# --- CONFIGURACIÓN DE PÁGINA ---
+st.set_page_config(page_title="Manga PDF Toolbox", page_icon="📚", layout="wide")
 
+# --- FUNCIONES LÓGICAS (EL CEREBRO) ---
 
 def es_blanco_y_negro(img):
-    if img.mode in ("L", "1"):
-        return True
-    if img.mode in ("RGBA", "P"):
-        img = img.convert("RGB")
+    if img.mode in ("L", "1"): return True
+    if img.mode in ("RGBA", "P"): img = img.convert("RGB")
     hsv_img = img.convert('HSV')
     banda_saturacion = hsv_img.split()[1]
-    estadisticas = ImageStat.Stat(banda_saturacion)
-    max_saturacion = estadisticas.extrema[0][1]
-    return max_saturacion < 15
+    max_sat = ImageStat.Stat(banda_saturacion).extrema[0][1]
+    return max_sat < 15
 
+# --- INTERFAZ LATERAL (MENÚ) ---
+st.sidebar.title("🎮 Panel de Control")
+opcion = st.sidebar.radio(
+    "Selecciona una herramienta:",
+    ["🏠 Inicio", "⚡ Compresor Inteligente", "✂️ Recortador de Páginas", "👾 Pixelador Pro", "📁 Imágenes a PDF (ZIP)"]
+)
 
-# --- INTERFAZ WEB ---
-st.title("Compresor Inteligente de Manga 📚⚡")
-st.write(
-    "Sube tu PDF pesado. Detectaremos automáticamente las portadas a color y comprimiremos brutalmente las páginas en blanco y negro.")
+# --- 🏠 PÁGINA DE INICIO ---
+if opcion == "🏠 Inicio":
+    st.title("Manga PDF Ultimate Toolbox 📚")
+    st.write("Bienvenido a tu suite de herramientas para Manga y Novelas.")
+    st.info("Selecciona una herramienta en el menú de la izquierda para comenzar.")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("""
+        ### ✨ Funciones Disponibles:
+        - **Compresor:** Reduce el peso detectando color automáticamente.
+        - **Recortador:** Borra páginas específicas de un PDF.
+        - **Pixelador:** Convierte imágenes a Pixel Art para Blue Marble.
+        - **Imágenes a PDF:** Convierte un archivo ZIP con fotos en un PDF.
+        """)
+    with col2:
+        st.image("https://images.unsplash.com/photo-1578632738980-30fc71985473?auto=format&fit=crop&q=80&w=400", caption="Optimiza tu lectura")
 
-# Caja para subir archivos
-archivo_subido = st.file_uploader("Arrastra tu PDF aquí", type=["pdf"])
-
-if archivo_subido is not None:
-    st.success(f"Archivo cargado: {archivo_subido.name}")
-    peso_original = archivo_subido.size / (1024 * 1024)
-    st.info(f"Peso original: {peso_original:.2f} MB")
-
-    # Botón mágico
-    if st.button("¡Comprimir PDF ahora!"):
-
-        # Barra de progreso para que el usuario no se desespere
-        barra_progreso = st.progress(0)
-        texto_estado = st.empty()
-
-        try:
-            # En web, leemos el PDF directamente desde la memoria (Bytes)
-            doc = fitz.open(stream=archivo_subido.read(), filetype="pdf")
-            imagenes_optimizadas = []
-            total_paginas = len(doc)
-
-            paginas_color = 0
-            paginas_bn = 0
-
-            for num_pagina in range(total_paginas):
-                pagina = doc[num_pagina]
-                lista_imagenes = pagina.get_images(full=True)
-
-                if lista_imagenes:
-                    xref = lista_imagenes[0][0]
-                    base_image = doc.extract_image(xref)
-                    bytes_imagen = base_image["image"]
-
-                    with Image.open(io.BytesIO(bytes_imagen)) as img:
-                        # Redimensión máxima a 1600px de alto
-                        ancho, alto = img.size
-                        if alto > 1600:
-                            proporcion = 1600 / float(alto)
-                            nuevo_ancho = int(float(ancho) * float(proporcion))
-                            img = img.resize((nuevo_ancho, 1600), Image.Resampling.LANCZOS)
-
-                        buffer_salida = io.BytesIO()
-
-                        # Lógica Híbrida
+# --- ⚡ COMPRESOR INTELIGENTE ---
+elif opcion == "⚡ Compresor Inteligente":
+    st.title("Compresor Inteligente Híbrido 🧠")
+    archivo = st.file_uploader("Sube tu PDF pesado", type=["pdf"])
+    
+    if archivo:
+        if st.button("🚀 Iniciar Compresión"):
+            barra = st.progress(0)
+            doc = fitz.open(stream=archivo.read(), filetype="pdf")
+            imgs_opt = []
+            for i in range(len(doc)):
+                pagina = doc[i]
+                lista_img = pagina.get_images(full=True)
+                if lista_img:
+                    xref = lista_img[0][0]
+                    img_data = doc.extract_image(xref)["image"]
+                    with Image.open(io.BytesIO(img_data)) as img:
+                        # Redimensión
+                        if img.height > 1600:
+                            img = img.resize((int(img.width * (1600/img.height)), 1600), Image.Resampling.LANCZOS)
+                        
+                        buf = io.BytesIO()
                         if es_blanco_y_negro(img):
                             img = img.convert("L")
-                            potenciador = ImageEnhance.Contrast(img)
-                            img = potenciador.enhance(1.4)
-                            img.save(buffer_salida, format="JPEG", quality=70, optimize=True)
-                            paginas_bn += 1
+                            img = ImageEnhance.Contrast(img).enhance(1.4)
+                            img.save(buf, format="JPEG", quality=70, optimize=True)
                         else:
-                            if img.mode in ("RGBA", "P"):
-                                img = img.convert("RGB")
-                            img.save(buffer_salida, format="JPEG", quality=80, optimize=True)
-                            paginas_color += 1
+                            if img.mode != "RGB": img = img.convert("RGB")
+                            img.save(buf, format="JPEG", quality=80, optimize=True)
+                        imgs_opt.append(buf.getvalue())
+                barra.progress((i + 1) / len(doc))
+            
+            pdf_final = img2pdf.convert(imgs_opt)
+            st.download_button("⬇️ Descargar PDF Optimizado", pdf_final, f"mini_{archivo.name}", "application/pdf")
 
-                        imagenes_optimizadas.append(buffer_salida.getvalue())
+# --- ✂️ RECORTADOR DE PÁGINAS ---
+elif opcion == "✂️ Recortador de Páginas":
+    st.title("Recortador de PDFs ✂️")
+    archivo = st.file_uploader("Sube el PDF a editar", type=["pdf"])
+    paginas_input = st.text_input("Páginas a BORRAR (separadas por comas, ej: 1, 3, 5)")
+    
+    if archivo and paginas_input:
+        if st.button("Eliminar Páginas"):
+            doc = fitz.open(stream=archivo.read(), filetype="pdf")
+            indices_a_borrar = [int(x.strip()) - 1 for x in paginas_input.split(",")]
+            
+            # Borrar de atrás hacia adelante para no arruinar los índices
+            for indice in sorted(indices_a_borrar, reverse=True):
+                if 0 <= indice < len(doc):
+                    doc.delete_page(indice)
+            
+            buf = io.BytesIO()
+            doc.save(buf)
+            st.download_button("⬇️ Descargar PDF Recortado", buf.getvalue(), f"editado_{archivo.name}", "application/pdf")
 
-                # Actualizar barra de progreso web
-                progreso = (num_pagina + 1) / total_paginas
-                barra_progreso.progress(progreso)
-                texto_estado.text(
-                    f"Procesando página {num_pagina + 1} de {total_paginas}... (🎨 Color: {paginas_color} | 📄 B/N: {paginas_bn})")
+# --- 👾 PIXELADOR PRO ---
+elif opcion == "👾 Pixelador Pro":
+    st.title("Pixelador para Blue Marble 👾")
+    foto = st.file_uploader("Sube una imagen", type=["jpg", "png", "webp"])
+    if foto:
+        img_orig = Image.open(foto)
+        st.image(img_orig, caption="Original", width=300)
+        
+        nivel = st.slider("Nivel de detalle (Escala %)", 1, 100, 20)
+        
+        ancho, alto = img_orig.size
+        nuevo_w = max(1, int(ancho * (nivel/100)))
+        nuevo_h = max(1, int(alto * (nivel/100)))
+        
+        st.warning(f"Resolución final: {nuevo_w} x {nuevo_h} píxeles")
+        
+        # Proceso de pixelado
+        img_pix = img_orig.resize((nuevo_w, nuevo_h), Image.Resampling.BILINEAR)
+        img_preview = img_pix.resize((ancho, alto), Image.Resampling.NEAREST)
+        
+        st.image(img_preview, caption="Vista Previa Pixelada", width=300)
+        
+        buf = io.BytesIO()
+        img_pix.save(buf, format="PNG")
+        st.download_button("⬇️ Descargar Pixel Art", buf.getvalue(), "pixel_art.png", "image/png")
 
-            # Armar PDF Final en memoria
-            if imagenes_optimizadas:
-                texto_estado.text("¡Empaquetando nuevo PDF...!")
-                pdf_final_bytes = img2pdf.convert(imagenes_optimizadas)
-
-                peso_nuevo = len(pdf_final_bytes) / (1024 * 1024)
-                ahorro = 100 - ((peso_nuevo / peso_original) * 100)
-
-                st.success(
-                    f"¡Terminado! El nuevo peso es {peso_nuevo:.2f} MB. Te ahorraste un {ahorro:.1f}% de espacio.")
-
-                # BOTÓN DE DESCARGA WEB
-                st.download_button(
-                    label="⬇️ Descargar PDF Comprimido",
-                    data=pdf_final_bytes,
-                    file_name=archivo_subido.name.replace(".pdf", "_Mini.pdf"),
-                    mime="application/pdf"
-                )
+# --- 📁 IMÁGENES A PDF (ZIP) ---
+elif opcion == "📁 Imágenes a PDF (ZIP)":
+    st.title("Creador de PDF desde Imágenes 📁")
+    st.write("Sube un archivo ZIP que contenga tus imágenes (JPG/PNG).")
+    archivo_zip = st.file_uploader("Sube el archivo ZIP", type=["zip"])
+    
+    if archivo_zip:
+        if st.button("Convertir a PDF"):
+            with zipfile.ZipFile(archivo_zip, "r") as z:
+                nombres = sorted([n for n in z.namelist() if n.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))])
+                imgs_data = []
+                for nombre in nombres:
+                    imgs_data.append(z.read(nombre))
+                
+            if imgs_data:
+                pdf_bytes = img2pdf.convert(imgs_data)
+                st.download_button("⬇️ Descargar PDF Creado", pdf_bytes, "nuevo_manga.pdf", "application/pdf")
             else:
-                st.error("No se encontraron imágenes en el PDF.")
-
-        except Exception as e:
-            st.error(f"Ocurrió un error: {e}")
+                st.error("No se encontraron imágenes válidas en el ZIP.")
