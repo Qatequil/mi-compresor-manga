@@ -115,7 +115,7 @@ elif opcion == "✂️ Recortador de Páginas":
             st.download_button("⬇️ Descargar PDF Recortado", buf.getvalue(), f"editado_{archivo.name}", "application/pdf")
 
 # --- 📁 IMÁGENES A PDF (UNIVERSAL) ---
-elif opcion == "📁 Imágenes a PDF (Múltiple)":
+elif opcion == "📁 Imágenes a PDF (Universal)":
     st.title("Creador de PDF desde Imágenes 📁")
     st.write("Ideal para móvil: Sube un solo **ZIP** o selecciona **múltiples imágenes**.")
     
