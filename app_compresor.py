@@ -114,7 +114,6 @@ elif opcion == "✂️ Recortador de Páginas":
             buf = io.BytesIO(); doc.save(buf)
             st.download_button("⬇️ Descargar PDF Recortado", buf.getvalue(), f"editado_{archivo.name}", "application/pdf")
 
-# --- 📁 IMÁGENES A PDF (UNIVERSAL) ---
 # --- 📁 IMÁGENES A PDF (UNIVERSAL Y ANTI-ERRORES) ---
 elif opcion == "📁 Imágenes a PDF (Múltiple)":
     st.title("Creador de PDF desde Imágenes 📁")
@@ -182,4 +181,4 @@ elif opcion == "📁 Imágenes a PDF (Múltiple)":
                 except Exception as e:
                     st.error(f"Error al crear el PDF: {e}")
             else:
-                st.error("No se encontraron imágenes válidas.")se encontraron imágenes válidas. Asegúrate de que el ZIP contenga fotos JPG o PNG.")
+                st.error("No se encontraron imágenes válidas.")
