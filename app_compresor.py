@@ -22,7 +22,7 @@ def es_blanco_y_negro(img):
 st.sidebar.title("🎮 Panel de Control")
 opcion = st.sidebar.radio(
     "Selecciona una herramienta:",
-    ["🏠 Inicio", "⚡ Compresor Inteligente", "✂️ Recortador de Páginas", "👾 Pixelador Pro", "📁 Imágenes a PDF (ZIP)"]
+    ["🏠 Inicio", "⚡ Compresor Inteligente", "✂️ Recortador de Páginas", "📁 Imágenes a PDF (ZIP)"]
 )
 
 # --- 🏠 PÁGINA DE INICIO ---
@@ -97,32 +97,6 @@ elif opcion == "✂️ Recortador de Páginas":
             buf = io.BytesIO()
             doc.save(buf)
             st.download_button("⬇️ Descargar PDF Recortado", buf.getvalue(), f"editado_{archivo.name}", "application/pdf")
-
-# --- 👾 PIXELADOR PRO ---
-elif opcion == "👾 Pixelador Pro":
-    st.title("Pixelador para Blue Marble 👾")
-    foto = st.file_uploader("Sube una imagen", type=["jpg", "png", "webp"])
-    if foto:
-        img_orig = Image.open(foto)
-        st.image(img_orig, caption="Original", width=300)
-        
-        nivel = st.slider("Nivel de detalle (Escala %)", 1, 100, 20)
-        
-        ancho, alto = img_orig.size
-        nuevo_w = max(1, int(ancho * (nivel/100)))
-        nuevo_h = max(1, int(alto * (nivel/100)))
-        
-        st.warning(f"Resolución final: {nuevo_w} x {nuevo_h} píxeles")
-        
-        # Proceso de pixelado
-        img_pix = img_orig.resize((nuevo_w, nuevo_h), Image.Resampling.BILINEAR)
-        img_preview = img_pix.resize((ancho, alto), Image.Resampling.NEAREST)
-        
-        st.image(img_preview, caption="Vista Previa Pixelada", width=300)
-        
-        buf = io.BytesIO()
-        img_pix.save(buf, format="PNG")
-        st.download_button("⬇️ Descargar Pixel Art", buf.getvalue(), "pixel_art.png", "image/png")
 
 # --- 📁 IMÁGENES A PDF (ZIP) ---
 elif opcion == "📁 Imágenes a PDF (ZIP)":
