@@ -117,7 +117,7 @@ elif opcion == "✂️ Recortador de Páginas":
 # --- 📁 IMÁGENES A PDF (UNIVERSAL) ---
 elif opcion == "📁 Imágenes a PDF (Universal)":
     st.title("Creador de PDF desde Imágenes 📁")
-    st.write("Ideal para móvil: Sube un solo **ZIP** o selecciona **múltiples imágenes**.")
+    st.write("Sube un solo **ZIP** o selecciona **múltiples imágenes**.")
     
     # Añadimos "zip" a los tipos permitidos
     archivos = st.file_uploader(
