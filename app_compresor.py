@@ -22,7 +22,7 @@ def es_blanco_y_negro(img):
 st.sidebar.title("🎮 Panel de Control")
 opcion = st.sidebar.radio(
     "Selecciona una herramienta:",
-    ["🏠 Inicio", "⚡ Compresor Inteligente", "🖼️ Extractor de Imágenes", "✂️ Recortador de Páginas", "📁 Imágenes a PDF (Múltiple)"]
+    ["🏠 Inicio", "⚡ Compresor Inteligente", "🖼️ Extractor de Imágenes", "✂️ Recortador de Páginas", "📁 Imágenes a PDF (Universal)"]
 )
 
 # --- 🏠 PÁGINA DE INICIO ---
