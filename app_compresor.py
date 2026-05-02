@@ -114,12 +114,51 @@ elif opcion == "✂️ Recortador de Páginas":
             buf = io.BytesIO(); doc.save(buf)
             st.download_button("⬇️ Descargar PDF Recortado", buf.getvalue(), f"editado_{archivo.name}", "application/pdf")
 
-# --- 📁 IMÁGENES A PDF ---
+# --- 📁 IMÁGENES A PDF (UNIVERSAL) ---
 elif opcion == "📁 Imágenes a PDF (Múltiple)":
     st.title("Creador de PDF desde Imágenes 📁")
-    archivos = st.file_uploader("Sube imágenes sueltas", type=["jpg", "png", "jpeg", "webp"], accept_multiple_files=True)
+    st.write("Ideal para móvil: Sube un solo **ZIP** o selecciona **múltiples imágenes**.")
+    
+    # Añadimos "zip" a los tipos permitidos
+    archivos = st.file_uploader(
+        "Sube tus archivos aquí", 
+        type=["zip", "jpg", "png", "jpeg", "webp"], 
+        accept_multiple_files=True
+    )
+    
     if archivos:
         if st.button("Convertir a PDF"):
-            archivos_ordenados = sorted(archivos, key=lambda x: x.name)
-            imgs_data = [f.read() for f in archivos_ordenados]
-            st.download_button("⬇️ Descargar PDF Creado", img2pdf.convert(imgs_data), "nuevo_manga.pdf", "application/pdf")
+            imgs_data = []
+            
+            # Caso A: El usuario subió un solo archivo y es un ZIP
+            if len(archivos) == 1 and archivos[0].name.lower().endswith('.zip'):
+                st.info("Detectado archivo ZIP. Extrayendo imágenes...")
+                with zipfile.ZipFile(archivos[0], "r") as z:
+                    # Filtramos solo imágenes y ordenamos por nombre
+                    nombres = sorted([
+                        n for n in z.namelist() 
+                        if n.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))
+                    ])
+                    for nombre in nombres:
+                        imgs_data.append(z.read(nombre))
+            
+            # Caso B: El usuario subió imágenes sueltas (una o varias)
+            else:
+                st.info(f"Procesando {len(archivos)} imágenes sueltas...")
+                # Ordenamos por nombre de archivo para mantener el orden del manga
+                archivos_ordenados = sorted(archivos, key=lambda x: x.name)
+                for f in archivos_ordenados:
+                    imgs_data.append(f.read())
+            
+            if imgs_data:
+                # Convertimos la lista de bytes de imagen a un solo PDF
+                pdf_bytes = img2pdf.convert(imgs_data)
+                st.success("¡PDF generado con éxito!")
+                st.download_button(
+                    label="⬇️ Descargar PDF",
+                    data=pdf_bytes,
+                    file_name="manga_final.pdf",
+                    mime="application/pdf"
+                )
+            else:
+                st.error("No se encontraron imágenes válidas. Asegúrate de que el ZIP contenga fotos JPG o PNG.")
