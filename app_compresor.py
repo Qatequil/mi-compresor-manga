@@ -115,50 +115,71 @@ elif opcion == "✂️ Recortador de Páginas":
             st.download_button("⬇️ Descargar PDF Recortado", buf.getvalue(), f"editado_{archivo.name}", "application/pdf")
 
 # --- 📁 IMÁGENES A PDF (UNIVERSAL) ---
-elif opcion == "📁 Imágenes a PDF (Universal)":
+# --- 📁 IMÁGENES A PDF (UNIVERSAL Y ANTI-ERRORES) ---
+elif opcion == "📁 Imágenes a PDF (Múltiple)":
     st.title("Creador de PDF desde Imágenes 📁")
-    st.write("Sube un solo **ZIP** o selecciona **múltiples imágenes**.")
+    st.write("Ideal para móvil: Sube un solo **ZIP** o selecciona **múltiples imágenes**.")
     
-    # Añadimos "zip" a los tipos permitidos
     archivos = st.file_uploader(
         "Sube tus archivos aquí", 
         type=["zip", "jpg", "png", "jpeg", "webp"], 
         accept_multiple_files=True
     )
     
+    # --- FUNCIÓN SALVAVIDAS: Quita la transparencia (Canal Alfa) ---
+    def limpiar_transparencia(bytes_img):
+        try:
+            with Image.open(io.BytesIO(bytes_img)) as img:
+                # Si la imagen tiene transparencia (RGBA, LA, o paleta con alfa)
+                if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+                    fondo = Image.new("RGB", img.size, (255, 255, 255)) # Crea hoja blanca
+                    if img.mode == "P":
+                        img = img.convert("RGBA")
+                    # Pega la imagen sobre la hoja blanca
+                    fondo.paste(img, mask=img.split()[-1]) 
+                    
+                    buf = io.BytesIO()
+                    fondo.save(buf, format="JPEG", quality=95) # Guarda como JPG sin alfa
+                    return buf.getvalue()
+                return bytes_img # Si es normal, la devuelve tal cual
+        except Exception as e:
+            return bytes_img # Por si hay algún archivo corrupto, lo intenta pasar
+            
     if archivos:
         if st.button("Convertir a PDF"):
             imgs_data = []
+            barra = st.progress(0)
+            st.info("Procesando y limpiando imágenes...")
             
-            # Caso A: El usuario subió un solo archivo y es un ZIP
+            # Caso A: Archivo ZIP
             if len(archivos) == 1 and archivos[0].name.lower().endswith('.zip'):
-                st.info("Detectado archivo ZIP. Extrayendo imágenes...")
                 with zipfile.ZipFile(archivos[0], "r") as z:
-                    # Filtramos solo imágenes y ordenamos por nombre
-                    nombres = sorted([
-                        n for n in z.namelist() 
-                        if n.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))
-                    ])
-                    for nombre in nombres:
-                        imgs_data.append(z.read(nombre))
+                    nombres = sorted([n for n in z.namelist() if n.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))])
+                    for i, nombre in enumerate(nombres):
+                        img_limpia = limpiar_transparencia(z.read(nombre))
+                        imgs_data.append(img_limpia)
+                        barra.progress((i + 1) / len(nombres))
             
-            # Caso B: El usuario subió imágenes sueltas (una o varias)
+            # Caso B: Imágenes Sueltas
             else:
-                st.info(f"Procesando {len(archivos)} imágenes sueltas...")
-                # Ordenamos por nombre de archivo para mantener el orden del manga
                 archivos_ordenados = sorted(archivos, key=lambda x: x.name)
-                for f in archivos_ordenados:
-                    imgs_data.append(f.read())
+                for i, f in enumerate(archivos_ordenados):
+                    img_limpia = limpiar_transparencia(f.read())
+                    imgs_data.append(img_limpia)
+                    barra.progress((i + 1) / len(archivos_ordenados))
             
             if imgs_data:
-                # Convertimos la lista de bytes de imagen a un solo PDF
-                pdf_bytes = img2pdf.convert(imgs_data)
-                st.success("¡PDF generado con éxito!")
-                st.download_button(
-                    label="⬇️ Descargar PDF",
-                    data=pdf_bytes,
-                    file_name="manga_final.pdf",
-                    mime="application/pdf"
-                )
+                st.info("¡Ensamblando el PDF, un momento...!")
+                try:
+                    pdf_bytes = img2pdf.convert(imgs_data)
+                    st.success("¡PDF generado con éxito!")
+                    st.download_button(
+                        label="⬇️ Descargar PDF",
+                        data=pdf_bytes,
+                        file_name="manga_final.pdf",
+                        mime="application/pdf"
+                    )
+                except Exception as e:
+                    st.error(f"Error al crear el PDF: {e}")
             else:
-                st.error("No se encontraron imágenes válidas. Asegúrate de que el ZIP contenga fotos JPG o PNG.")
+                st.error("No se encontraron imágenes válidas.")se encontraron imágenes válidas. Asegúrate de que el ZIP contenga fotos JPG o PNG.")
