@@ -22,7 +22,14 @@ def es_blanco_y_negro(img):
 st.sidebar.title("🎮 Panel de Control")
 opcion = st.sidebar.radio(
     "Selecciona una herramienta:",
-    ["🏠 Inicio", "⚡ Compresor Inteligente", "🖼️ Extractor de Imágenes", "✂️ Recortador de Páginas", "📁 Imágenes a PDF (Universal)"]
+    [
+        "🏠 Inicio", 
+        "⚡ Compresor Inteligente", 
+        "🖼️ Extractor de Imágenes", 
+        "✂️ Recortador de Páginas", 
+        "🗑️ Limpiador de ZIP/CBZ",  # <-- NUEVA OPCIÓN AQUÍ
+        "📁 Imágenes a PDF (Universal)"
+    ]
 )
 
 # --- 🏠 PÁGINA DE INICIO ---
@@ -60,7 +67,7 @@ elif opcion == "⚡ Compresor Inteligente":
                 barra.progress((i + 1) / len(doc))
             st.download_button("⬇️ Descargar PDF Optimizado", img2pdf.convert(imgs_opt), f"mini_{archivo.name}", "application/pdf")
 
-# --- 🖼️ EXTRACTOR DE IMÁGENES (NUEVO) ---
+# --- 🖼️ EXTRACTOR DE IMÁGENES ---
 elif opcion == "🖼️ Extractor de Imágenes":
     st.title("Extractor de Imágenes Originales 🖼️")
     st.write("Extrae las imágenes puras del PDF (sin márgenes de página) en un archivo ZIP ordenado.")
@@ -83,9 +90,8 @@ elif opcion == "🖼️ Extractor de Imágenes":
                         xref = img_info[0]
                         base_image = doc.extract_image(xref)
                         image_bytes = base_image["image"]
-                        ext = base_image["ext"] # png, jpeg, etc.
+                        ext = base_image["ext"]
                         
-                        # Nombre con formato 000, 001, 002...
                         nombre_archivo = f"{contador:03d}.{ext}"
                         zf.writestr(nombre_archivo, image_bytes)
                         contador += 1
@@ -100,57 +106,46 @@ elif opcion == "🖼️ Extractor de Imágenes":
                 mime="application/zip"
             )
 
-# --- ✂️ RECORTADOR DE PÁGINAS (VERSIÓN VISUAL PRO) ---
+# --- ✂️ RECORTADOR DE PÁGINAS ---
 elif opcion == "✂️ Recortador de Páginas":
     st.title("Recortador Visual de PDFs ✂️")
-    st.write("Selecciona visualmente las páginas que deseas eliminar (ideal para quitar créditos o portadas dobles).")
+    st.write("Selecciona visualmente las páginas que deseas eliminar.")
     
     archivo = st.file_uploader("Sube el PDF a editar", type=["pdf"])
     
     if archivo:
-        # Abrimos el PDF original
         doc = fitz.open(stream=archivo.read(), filetype="pdf")
         total_paginas = len(doc)
         st.info(f"El PDF tiene un total de {total_paginas} páginas.")
         
-        # st.form evita que la página se recargue cada vez que haces clic en una casilla
         with st.form("formulario_recorte"):
             st.write("### 🖼️ Galería de Páginas")
             st.caption("Marca la casilla debajo de las páginas que quieres BORRAR.")
             
-            # Creamos una cuadrícula de 4 columnas para que parezca una galería
             columnas = st.columns(4)
             paginas_a_borrar = []
             
-            # Generamos las miniaturas
             for i in range(total_paginas):
-                col_actual = columnas[i % 4] # Esto reparte las imágenes entre las 4 columnas
+                col_actual = columnas[i % 4]
                 with col_actual:
-                    # Extraemos la página en calidad muy baja (0.2) para que cargue súper rápido
                     pagina = doc[i]
                     pix = pagina.get_pixmap(matrix=fitz.Matrix(0.2, 0.2))
                     img = Image.open(io.BytesIO(pix.tobytes("png")))
                     
                     st.image(img, use_container_width=True)
                     
-                    # Si el usuario marca esta casilla, guardamos el número 'i'
                     if st.checkbox(f"🗑️ Borrar Pág {i+1}", key=f"del_{i}"):
                         paginas_a_borrar.append(i)
             
-            # El botón final del formulario
             submit = st.form_submit_button("✂️ Eliminar Páginas Seleccionadas")
             
-        # Cuando el usuario presiona el botón del formulario
-        # Cuando el usuario presiona el botón del formulario
         if submit:
             if not paginas_a_borrar:
                 st.warning("No seleccionaste ninguna página.")
             else:
-                # 1. Extraemos el nombre base igual que hicimos con el conversor
                 nombre_base = archivo.name.rsplit('.', 1)[0]
                 nombre_final_recortado = f"{nombre_base}_recortado.pdf"
 
-                # 2. Operación de borrado
                 for indice in sorted(paginas_a_borrar, reverse=True):
                     doc.delete_page(indice)
                 
@@ -158,16 +153,90 @@ elif opcion == "✂️ Recortador de Páginas":
                 doc.save(buf)
                 
                 st.success(f"¡Listo! Se eliminaron {len(paginas_a_borrar)} páginas.")
-                
-                # 3. Botón con el nombre corregido
                 st.download_button(
                     label=f"⬇️ Descargar {nombre_final_recortado}",
                     data=buf.getvalue(),
-                    file_name=nombre_final_recortado, # <-- Aquí aplica el nombre que pediste
+                    file_name=nombre_final_recortado,
                     mime="application/pdf"
                 )
+
+# --- 🗑️ LIMPIADOR DE ZIP/CBZ (NUEVO) ---
+elif opcion == "🗑️ Limpiador de ZIP/CBZ":
+    st.title("Limpiador Visual de ZIP / CBZ 🗑️")
+    st.write("Selecciona visualmente las imágenes que deseas eliminar de tu archivo comprimido.")
+    
+    archivo_zip = st.file_uploader("Sube el archivo ZIP o CBZ a limpiar", type=["zip", "cbz"])
+    
+    if archivo_zip:
+        try:
+            # Leemos el archivo cargado en memoria
+            datos_zip = archivo_zip.read()
+            
+            with zipfile.ZipFile(io.BytesIO(datos_zip), 'r') as z:
+                # Obtenemos solo los archivos de imagen y los ordenamos
+                nombres_imagenes = sorted([n for n in z.namelist() if n.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))])
+                total_imagenes = len(nombres_imagenes)
                 
-# --- 📁 IMÁGENES A PDF (CON NOMBRE DINÁMICO) ---
+                if total_imagenes == 0:
+                    st.error("No se encontraron imágenes válidas en este archivo.")
+                else:
+                    st.info(f"El archivo contiene {total_imagenes} imágenes.")
+                    
+                    with st.form("formulario_limpieza_zip"):
+                        st.write("### 🖼️ Galería de Imágenes")
+                        st.caption("Marca la casilla debajo de las páginas que quieres BORRAR.")
+                        
+                        columnas = st.columns(4)
+                        imagenes_a_borrar = []
+                        
+                        for i, nombre in enumerate(nombres_imagenes):
+                            col_actual = columnas[i % 4]
+                            with col_actual:
+                                # Leemos la imagen y creamos una miniatura para no saturar la memoria
+                                img_bytes = z.read(nombre)
+                                img = Image.open(io.BytesIO(img_bytes))
+                                img.thumbnail((250, 250)) # Miniatura rápida
+                                
+                                st.image(img, use_container_width=True)
+                                
+                                # Nombre acortado para que no deforme la interfaz
+                                nombre_corto = (nombre[:15] + '..') if len(nombre) > 15 else nombre
+                                
+                                if st.checkbox(f"🗑️ Borrar {nombre_corto}", key=f"del_zip_{i}"):
+                                    imagenes_a_borrar.append(nombre)
+                        
+                        submit = st.form_submit_button("✂️ Eliminar Seleccionadas y Crear CBZ")
+                        
+            if submit:
+                if not imagenes_a_borrar:
+                    st.warning("No seleccionaste ninguna imagen para eliminar.")
+                else:
+                    nombre_base = archivo_zip.name.rsplit('.', 1)[0]
+                    nombre_final_cbz = f"{nombre_base}_limpio.cbz"
+                    
+                    zip_buffer_salida = io.BytesIO()
+                    
+                    # Abrimos el original y el nuevo simultáneamente
+                    with zipfile.ZipFile(io.BytesIO(datos_zip), 'r') as z_in:
+                        with zipfile.ZipFile(zip_buffer_salida, 'w', zipfile.ZIP_DEFLATED) as z_out:
+                            
+                            for nombre in nombres_imagenes:
+                                # Solo copiamos las que NO están marcadas para borrar
+                                if nombre not in imagenes_a_borrar:
+                                    z_out.writestr(nombre, z_in.read(nombre))
+                    
+                    st.success(f"¡Listo! Se eliminaron {len(imagenes_a_borrar)} páginas.")
+                    
+                    st.download_button(
+                        label=f"⬇️ Descargar {nombre_final_cbz}",
+                        data=zip_buffer_salida.getvalue(),
+                        file_name=nombre_final_cbz,
+                        mime="application/zip" # Funciona igual para .cbz
+                    )
+        except Exception as e:
+            st.error(f"Error al procesar el archivo: {e}")
+
+# --- 📁 IMÁGENES A PDF ---
 elif opcion == "📁 Imágenes a PDF (Universal)":
     st.title("Creador de PDF desde Imágenes 📁")
     st.write("Sube un ZIP o múltiples imágenes. Para convertirlo en un PDF")
@@ -193,12 +262,9 @@ elif opcion == "📁 Imágenes a PDF (Universal)":
             return bytes_img
             
     if archivos:
-        # --- LÓGICA PARA EL NOMBRE DEL ARCHIVO ---
         if len(archivos) == 1:
-            # Si es un solo archivo (como un ZIP), tomamos su nombre y quitamos la extensión
             nombre_base = archivos[0].name.rsplit('.', 1)[0]
         else:
-            # Si son imágenes sueltas, usamos el nombre de la primera o un genérico
             nombre_base = "manga_recopilacion"
             
         nombre_final_pdf = f"{nombre_base}_pdf.pdf"
@@ -207,15 +273,12 @@ elif opcion == "📁 Imágenes a PDF (Universal)":
             imgs_data = []
             barra = st.progress(0)
             
-            # Caso A: Archivo ZIP
             if len(archivos) == 1 and archivos[0].name.lower().endswith('.zip'):
                 with zipfile.ZipFile(archivos[0], "r") as z:
                     nombres = sorted([n for n in z.namelist() if n.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))])
                     for i, nombre in enumerate(nombres):
                         imgs_data.append(limpiar_transparencia(z.read(nombre)))
                         barra.progress((i + 1) / len(nombres))
-            
-            # Caso B: Imágenes Sueltas
             else:
                 archivos_ordenados = sorted(archivos, key=lambda x: x.name)
                 for i, f in enumerate(archivos_ordenados):
@@ -229,7 +292,7 @@ elif opcion == "📁 Imágenes a PDF (Universal)":
                     st.download_button(
                         label=f"⬇️ Descargar {nombre_final_pdf}",
                         data=pdf_bytes,
-                        file_name=nombre_final_pdf, # Aquí aplicamos el nombre dinámico
+                        file_name=nombre_final_pdf,
                         mime="application/pdf"
                     )
                 except Exception as e:
