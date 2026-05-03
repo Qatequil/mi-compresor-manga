@@ -4,12 +4,12 @@ import img2pdf
 from PIL import Image, ImageEnhance, ImageStat
 import io
 import zipfile
+import os
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Manga PDF Toolbox", page_icon="📚", layout="wide")
 
 # --- FUNCIONES LÓGICAS ---
-
 def es_blanco_y_negro(img):
     if img.mode in ("L", "1"): return True
     if img.mode in ("RGBA", "P"): img = img.convert("RGB")
@@ -24,10 +24,11 @@ opcion = st.sidebar.radio(
     "Selecciona una herramienta:",
     [
         "🏠 Inicio", 
-        "⚡ Compresor Inteligente", 
+        "⚡ Compresor de PDF", 
+        "⚡ Compresor de ZIP/CBZ",  # <-- NUEVA OPCIÓN
         "🖼️ Extractor de Imágenes", 
-        "✂️ Recortador de Páginas", 
-        "🗑️ Limpiador de ZIP/CBZ",  # <-- NUEVA OPCIÓN AQUÍ
+        "✂️ Recortador de Páginas PDF", 
+        "🗑️ Limpiador de ZIP/CBZ",
         "📁 Imágenes a PDF (Universal)"
     ]
 )
@@ -38,9 +39,9 @@ if opcion == "🏠 Inicio":
     st.write("Suite optimizada para la gestión de archivos de Manga y Novelas.")
     st.info("Selecciona una herramienta a la izquierda.")
 
-# --- ⚡ COMPRESOR INTELIGENTE ---
-elif opcion == "⚡ Compresor Inteligente":
-    st.title("Compresor Inteligente Híbrido 🧠")
+# --- ⚡ COMPRESOR DE PDF ---
+elif opcion == "⚡ Compresor de PDF":
+    st.title("Compresor Inteligente de PDF 🧠")
     archivo = st.file_uploader("Sube tu PDF pesado", type=["pdf"])
     if archivo:
         if st.button("🚀 Iniciar Compresión"):
@@ -58,7 +59,8 @@ elif opcion == "⚡ Compresor Inteligente":
                             img = img.resize((int(img.width * (1600/img.height)), 1600), Image.Resampling.LANCZOS)
                         buf = io.BytesIO()
                         if es_blanco_y_negro(img):
-                            img = img.convert("L"); img = ImageEnhance.Contrast(img).enhance(1.4)
+                            img = img.convert("L")
+                            img = ImageEnhance.Contrast(img).enhance(1.4)
                             img.save(buf, format="JPEG", quality=70, optimize=True)
                         else:
                             if img.mode != "RGB": img = img.convert("RGB")
@@ -66,6 +68,93 @@ elif opcion == "⚡ Compresor Inteligente":
                         imgs_opt.append(buf.getvalue())
                 barra.progress((i + 1) / len(doc))
             st.download_button("⬇️ Descargar PDF Optimizado", img2pdf.convert(imgs_opt), f"mini_{archivo.name}", "application/pdf")
+
+# --- ⚡ COMPRESOR DE ZIP/CBZ (NUEVO) ---
+elif opcion == "⚡ Compresor de ZIP/CBZ":
+    st.title("Compresor Inteligente de ZIP / CBZ ⚡")
+    st.write("Aplica la compresión híbrida directamente a tus archivos comprimidos sin pasarlos a PDF.")
+
+    archivo_zip = st.file_uploader("Sube tu archivo ZIP o CBZ pesado", type=["zip", "cbz"])
+
+    if archivo_zip:
+        peso_original = archivo_zip.size / (1024 * 1024)
+        st.info(f"Peso original del archivo: {peso_original:.2f} MB")
+
+        if st.button("🚀 Aplastar Archivo"):
+            barra = st.progress(0)
+            texto_estado = st.empty()
+
+            try:
+                datos_zip = archivo_zip.read()
+                zip_buffer_salida = io.BytesIO()
+
+                paginas_color = 0
+                paginas_bn = 0
+
+                # Leemos el ZIP en memoria
+                with zipfile.ZipFile(io.BytesIO(datos_zip), 'r') as z_in:
+                    lista_imagenes = sorted([f for f in z_in.namelist() if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))])
+                    total_paginas = len(lista_imagenes)
+
+                    if total_paginas == 0:
+                        st.error("No se encontraron imágenes válidas para comprimir.")
+                    else:
+                        # Preparamos el nuevo ZIP
+                        with zipfile.ZipFile(zip_buffer_salida, 'w', zipfile.ZIP_DEFLATED) as z_out:
+                            for i, filename in enumerate(lista_imagenes):
+                                img_bytes = z_in.read(filename)
+
+                                with Image.open(io.BytesIO(img_bytes)) as img:
+                                    # 1. Redimensión Inteligente
+                                    ancho, alto = img.size
+                                    if alto > 1600:
+                                        proporcion = 1600 / float(alto)
+                                        nuevo_ancho = int(float(ancho) * float(proporcion))
+                                        img = img.resize((nuevo_ancho, 1600), Image.Resampling.LANCZOS)
+
+                                    buffer_img = io.BytesIO()
+
+                                    # 2. Análisis Híbrido de Color vs B/N
+                                    if es_blanco_y_negro(img):
+                                        img = img.convert("L")
+                                        potenciador = ImageEnhance.Contrast(img)
+                                        img = potenciador.enhance(1.4)
+                                        img.save(buffer_img, format="JPEG", quality=70, optimize=True)
+                                        paginas_bn += 1
+                                    else:
+                                        if img.mode in ("RGBA", "P"):
+                                            img = img.convert("RGB")
+                                        img.save(buffer_img, format="JPEG", quality=80, optimize=True)
+                                        paginas_color += 1
+
+                                    # 3. Forzamos la extensión JPEG internamente para ahorrar más
+                                    nuevo_nombre = os.path.splitext(filename)[0] + ".jpg"
+                                    z_out.writestr(nuevo_nombre, buffer_img.getvalue())
+
+                                # Actualizamos estado en pantalla
+                                progreso = (i + 1) / total_paginas
+                                barra.progress(progreso)
+                                texto_estado.text(f"Procesando página {i + 1} de {total_paginas} (🎨: {paginas_color} | 📄: {paginas_bn})")
+
+                if total_paginas > 0:
+                    # Matemáticas finales
+                    peso_nuevo = zip_buffer_salida.getbuffer().nbytes / (1024 * 1024)
+                    ahorro = 100 - ((peso_nuevo / peso_original) * 100)
+                    texto_estado.text("¡Empaquetado finalizado!")
+
+                    st.success(f"¡Listo! El nuevo peso es {peso_nuevo:.2f} MB. Ahorraste un {ahorro:.1f}% de espacio en tu dispositivo.")
+
+                    # Botón de Descarga
+                    nombre_base = archivo_zip.name.rsplit('.', 1)[0]
+                    st.download_button(
+                        label="⬇️ Descargar CBZ Optimizado",
+                        data=zip_buffer_salida.getvalue(),
+                        file_name=f"{nombre_base}_ligero.cbz",
+                        mime="application/zip"
+                    )
+
+            except Exception as e:
+                st.error(f"Error durante la compresión: {e}")
 
 # --- 🖼️ EXTRACTOR DE IMÁGENES ---
 elif opcion == "🖼️ Extractor de Imágenes":
@@ -106,8 +195,8 @@ elif opcion == "🖼️ Extractor de Imágenes":
                 mime="application/zip"
             )
 
-# --- ✂️ RECORTADOR DE PÁGINAS ---
-elif opcion == "✂️ Recortador de Páginas":
+# --- ✂️ RECORTADOR DE PÁGINAS PDF ---
+elif opcion == "✂️ Recortador de Páginas PDF":
     st.title("Recortador Visual de PDFs ✂️")
     st.write("Selecciona visualmente las páginas que deseas eliminar.")
     
@@ -160,7 +249,7 @@ elif opcion == "✂️ Recortador de Páginas":
                     mime="application/pdf"
                 )
 
-# --- 🗑️ LIMPIADOR DE ZIP/CBZ (NUEVO) ---
+# --- 🗑️ LIMPIADOR DE ZIP/CBZ ---
 elif opcion == "🗑️ Limpiador de ZIP/CBZ":
     st.title("Limpiador Visual de ZIP / CBZ 🗑️")
     st.write("Selecciona visualmente las imágenes que deseas eliminar de tu archivo comprimido.")
@@ -169,11 +258,9 @@ elif opcion == "🗑️ Limpiador de ZIP/CBZ":
     
     if archivo_zip:
         try:
-            # Leemos el archivo cargado en memoria
             datos_zip = archivo_zip.read()
             
             with zipfile.ZipFile(io.BytesIO(datos_zip), 'r') as z:
-                # Obtenemos solo los archivos de imagen y los ordenamos
                 nombres_imagenes = sorted([n for n in z.namelist() if n.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))])
                 total_imagenes = len(nombres_imagenes)
                 
@@ -192,14 +279,12 @@ elif opcion == "🗑️ Limpiador de ZIP/CBZ":
                         for i, nombre in enumerate(nombres_imagenes):
                             col_actual = columnas[i % 4]
                             with col_actual:
-                                # Leemos la imagen y creamos una miniatura para no saturar la memoria
                                 img_bytes = z.read(nombre)
                                 img = Image.open(io.BytesIO(img_bytes))
-                                img.thumbnail((250, 250)) # Miniatura rápida
+                                img.thumbnail((250, 250))
                                 
                                 st.image(img, use_container_width=True)
                                 
-                                # Nombre acortado para que no deforme la interfaz
                                 nombre_corto = (nombre[:15] + '..') if len(nombre) > 15 else nombre
                                 
                                 if st.checkbox(f"🗑️ Borrar {nombre_corto}", key=f"del_zip_{i}"):
@@ -216,12 +301,9 @@ elif opcion == "🗑️ Limpiador de ZIP/CBZ":
                     
                     zip_buffer_salida = io.BytesIO()
                     
-                    # Abrimos el original y el nuevo simultáneamente
                     with zipfile.ZipFile(io.BytesIO(datos_zip), 'r') as z_in:
                         with zipfile.ZipFile(zip_buffer_salida, 'w', zipfile.ZIP_DEFLATED) as z_out:
-                            
                             for nombre in nombres_imagenes:
-                                # Solo copiamos las que NO están marcadas para borrar
                                 if nombre not in imagenes_a_borrar:
                                     z_out.writestr(nombre, z_in.read(nombre))
                     
@@ -231,7 +313,7 @@ elif opcion == "🗑️ Limpiador de ZIP/CBZ":
                         label=f"⬇️ Descargar {nombre_final_cbz}",
                         data=zip_buffer_salida.getvalue(),
                         file_name=nombre_final_cbz,
-                        mime="application/zip" # Funciona igual para .cbz
+                        mime="application/zip"
                     )
         except Exception as e:
             st.error(f"Error al procesar el archivo: {e}")
@@ -239,7 +321,7 @@ elif opcion == "🗑️ Limpiador de ZIP/CBZ":
 # --- 📁 IMÁGENES A PDF ---
 elif opcion == "📁 Imágenes a PDF (Universal)":
     st.title("Creador de PDF desde Imágenes 📁")
-    st.write("Sube un ZIP o múltiples imágenes. Para convertirlo en un PDF")
+    st.write("Sube un ZIP o múltiples imágenes para convertirlo en un PDF.")
     
     archivos = st.file_uploader(
         "Sube tus archivos aquí", 
